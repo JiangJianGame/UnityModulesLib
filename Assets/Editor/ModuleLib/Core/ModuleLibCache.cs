@@ -82,28 +82,29 @@ namespace JiangJian
         }
 
         /// <summary>
-        /// 检查指定包体文件是否已经下载到本地缓存
+        /// 生成位于系统 Temp 目录的临时导入包路径（即用即删，工程目录 0 产生）
         /// </summary>
-        public static bool IsPackageDownloaded(string zipFile, out string localPath)
+        public static string CreateTempPackagePath(string zipFile)
         {
-            localPath = null;
-            if (string.IsNullOrEmpty(zipFile)) return false;
-
-            string targetPath = Path.Combine(ModuleLibConfig.PackageCacheDirectory, zipFile);
-            if (File.Exists(targetPath) && new FileInfo(targetPath).Length > 0)
-            {
-                localPath = targetPath;
-                return true;
-            }
-            return false;
+            string fileName = string.IsNullOrEmpty(zipFile) ? "temp_module.unitypackage" : Path.GetFileName(zipFile);
+            string safeName = Guid.NewGuid().ToString("N").Substring(0, 8) + "_" + fileName;
+            return Path.Combine(ModuleLibConfig.TempPackageDirectory, safeName);
         }
 
         /// <summary>
-        /// 获取包体文件的本地保存路径
+        /// 清理系统临时目录中的残留暂存包
         /// </summary>
-        public static string GetPackageLocalPath(string zipFile)
+        public static void CleanAllTempPackages()
         {
-            return Path.Combine(ModuleLibConfig.PackageCacheDirectory, zipFile);
+            try
+            {
+                string dir = ModuleLibConfig.TempPackageDirectory;
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, true);
+                }
+            }
+            catch {}
         }
 
         /// <summary>

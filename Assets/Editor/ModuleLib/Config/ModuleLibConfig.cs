@@ -83,13 +83,13 @@ namespace JiangJian
         }
 
         /// <summary>
-        /// 资源包体（UnityPackage）下载暂存目录
+        /// 临时导入管道目录（位于系统临时目录中，不在工程内生成任何文件，导入完成后即生即删）
         /// </summary>
-        public static string PackageCacheDirectory
+        public static string TempPackageDirectory
         {
             get
             {
-                string dir = Path.Combine(CacheRootDirectory, "Packages");
+                string dir = Path.Combine(Path.GetTempPath(), "UnityModuleLib", "TempPackages");
                 if (!Directory.Exists(dir))
                 {
                     Directory.CreateDirectory(dir);

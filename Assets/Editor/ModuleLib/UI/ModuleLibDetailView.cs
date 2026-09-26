@@ -259,14 +259,12 @@ namespace JiangJian
         {
             GUILayout.BeginVertical(EditorStyles.helpBox);
 
-            string localPackagePath;
-            bool isDownloaded = ModuleLibCache.IsPackageDownloaded(model.zip_file, out localPackagePath);
             string downloadUrl = model.GetPackageDownloadUrl(ModuleLibConfig.ServerUrl);
 
             if (_isDownloading)
             {
-                // 下载中状态与进度条
-                GUILayout.Label($"正在下载资源包体... {(_downloadProgress * 100f):F0}%", EditorStyles.boldLabel);
+                // 下载与准备导入进度
+                GUILayout.Label($"正在传输包体数据... {(_downloadProgress * 100f):F0}%", EditorStyles.boldLabel);
                 Rect progRect = GUILayoutUtility.GetRect(EditorGUIUtility.currentViewWidth - 40, 20);
                 EditorGUI.ProgressBar(progRect, _downloadProgress, $"{(_downloadProgress * 100f):F0}%");
                 if (!string.IsNullOrEmpty(_statusMessage))
@@ -274,32 +272,8 @@ namespace JiangJian
                     GUILayout.Label(_statusMessage, EditorStyles.miniLabel);
                 }
             }
-            else if (isDownloaded)
-            {
-                // 已下载完成，直接提供一键导入
-                GUILayout.BeginHorizontal();
-                var oldCol = GUI.backgroundColor;
-                GUI.backgroundColor = new Color(0.2f, 0.8f, 0.4f, 1f);
-
-                if (GUILayout.Button("✓ 已下载：导入到当前工程", ModuleLibStyles.BigActionButton))
-                {
-                    ImportPackageToProject(localPackagePath);
-                }
-
-                GUI.backgroundColor = oldCol;
-
-                if (GUILayout.Button("重新下载", GUILayout.Width(90), GUILayout.Height(36)))
-                {
-                    StartDownload(model, downloadUrl, parentWindow);
-                }
-
-                GUILayout.EndHorizontal();
-
-                GUILayout.Label($"缓存文件位置: {localPackagePath}", EditorStyles.miniLabel);
-            }
             else
             {
-                // 未下载，提供立即下载导入按钮
                 if (string.IsNullOrEmpty(downloadUrl))
                 {
                     GUILayout.Label("该资源当前暂无附带包体文件", EditorStyles.centeredGreyMiniLabel);
@@ -307,30 +281,33 @@ namespace JiangJian
                 else
                 {
                     var oldCol = GUI.backgroundColor;
-                    GUI.backgroundColor = new Color(0.25f, 0.65f, 1f, 1f);
+                    GUI.backgroundColor = new Color(0.2f, 0.75f, 0.4f, 1f);
 
-                    if (GUILayout.Button($"立即下载并导入 ({model.size:F1} MB)", ModuleLibStyles.BigActionButton))
+                    string btnText = $" 📥 导入到当前工程 ({model.size:F1} MB)";
+                    if (GUILayout.Button(btnText, ModuleLibStyles.BigActionButton))
                     {
-                        StartDownload(model, downloadUrl, parentWindow);
+                        StartEphemeralImportFlow(model, downloadUrl, parentWindow);
                     }
 
                     GUI.backgroundColor = oldCol;
+                    GUILayout.Label("💡 提示：点击后将直接拉取并唤起 Unity 官方导入选择窗口，不产生任何本地冗余包体文件。", EditorStyles.centeredGreyMiniLabel);
                 }
             }
 
             GUILayout.EndVertical();
         }
 
-        private void StartDownload(ModelItemData model, string downloadUrl, EditorWindow parentWindow)
+        private void StartEphemeralImportFlow(ModelItemData model, string downloadUrl, EditorWindow parentWindow)
         {
             if (string.IsNullOrEmpty(downloadUrl)) return;
 
-            string savePath = ModuleLibCache.GetPackageLocalPath(model.zip_file);
+            // 在系统 Temp 临时目录创建毫秒级暂存文件（不在工程内，工程体积 0 增加）
+            string tempPackagePath = ModuleLibCache.CreateTempPackagePath(model.zip_file);
             _isDownloading = true;
             _downloadProgress = 0f;
-            _statusMessage = "连接服务器中...";
+            _statusMessage = "连接服务器并传输数据中...";
 
-            ModuleLibHttp.DownloadFile(downloadUrl, savePath,
+            ModuleLibHttp.DownloadFile(downloadUrl, tempPackagePath,
                 progress =>
                 {
                     _downloadProgress = progress;
@@ -340,31 +317,63 @@ namespace JiangJian
                 {
                     _isDownloading = false;
                     _downloadProgress = 1f;
-                    _statusMessage = "下载完成！准备解压导入...";
+                    _statusMessage = "";
                     if (parentWindow != null) parentWindow.Repaint();
 
-                    // 自动拉起 Unity 原生导入窗口
-                    ImportPackageToProject(completedPath);
+                    // 启动 Unity 原生导入并挂载即生即死清理钩子
+                    ExecuteInteractiveImportAndCleanup(completedPath);
                 },
                 error =>
                 {
                     _isDownloading = false;
-                    _statusMessage = "下载失败: " + error;
-                    Debug.LogError("[ModuleLibDetailView] 下载包体失败: " + error);
+                    _statusMessage = "传输失败: " + error;
+                    Debug.LogError("[ModuleLibDetailView] 获取包体失败: " + error);
+                    if (File.Exists(tempPackagePath))
+                    {
+                        try { File.Delete(tempPackagePath); } catch {}
+                    }
                     if (parentWindow != null) parentWindow.Repaint();
                 });
         }
 
-        private void ImportPackageToProject(string packagePath)
+        private void ExecuteInteractiveImportAndCleanup(string tempPackagePath)
         {
-            if (!File.Exists(packagePath))
+            if (!File.Exists(tempPackagePath))
             {
-                EditorUtility.DisplayDialog("提示", "未找到包体文件: " + packagePath, "确定");
+                EditorUtility.DisplayDialog("提示", "未找到包体临时数据！", "确定");
                 return;
             }
 
-            // 调用 Unity 原生 Package 导入面板（true 会弹出文件勾选确认窗口，安全直观）
-            AssetDatabase.ImportPackage(packagePath, true);
+            // 注册 Unity 导入事件监听（无论用户点击导入、取消、还是导入失败，均在完成时瞬间销毁临时文件）
+            AssetDatabase.ImportPackageCallback onCompleted = null;
+            AssetDatabase.ImportPackageCallback onCancelled = null;
+            AssetDatabase.ImportPackageFailedCallback onFailed = null;
+
+            Action cleanup = () =>
+            {
+                AssetDatabase.importPackageCompleted -= onCompleted;
+                AssetDatabase.importPackageCancelled -= onCancelled;
+                AssetDatabase.importPackageFailed -= onFailed;
+                try
+                {
+                    if (File.Exists(tempPackagePath))
+                    {
+                        File.Delete(tempPackagePath);
+                    }
+                }
+                catch {}
+            };
+
+            onCompleted = packageName => cleanup();
+            onCancelled = packageName => cleanup();
+            onFailed = (packageName, errorMsg) => cleanup();
+
+            AssetDatabase.importPackageCompleted += onCompleted;
+            AssetDatabase.importPackageCancelled += onCancelled;
+            AssetDatabase.importPackageFailed += onFailed;
+
+            // 唤起 Unity 官方原生导入窗口（interactive: true 会展示勾选确认弹窗）
+            AssetDatabase.ImportPackage(tempPackagePath, true);
         }
 
         private void DrawDescriptionSection(ModelItemData model)
