@@ -4,7 +4,7 @@ using UnityEngine;
 namespace JiangJian
 {
     /// <summary>
-    /// XXL 模块库 UI 视觉规范与全局样式表
+    /// 资源库 UI 视觉规范与全局样式表
     /// 支持 Unity ProSkin（深色）与 Personal（浅色）双主题自适应
     /// 兼容 Unity 2018+
     /// </summary>

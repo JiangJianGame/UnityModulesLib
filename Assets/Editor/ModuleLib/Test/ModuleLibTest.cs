@@ -14,7 +14,7 @@ namespace JiangJian
     {
         private static string ModelsUrl => ModuleLibConfig.ServerUrl + "/api/collections/models/records?perPage=50&sort=-created&expand=category,type";
 
-        [MenuItem("Tools/XXL 模块库/测试获取模块列表", priority = 10)]
+        [MenuItem("Tools/资源库/测试获取模块列表", priority = 10)]
         public static void FetchAndPrintModelList()
         {
             Debug.Log("<color=#4EA8DE><b>[ModuleLibTest]</b> 开始请求资源模块数据列表: " + ModelsUrl + "</color>");

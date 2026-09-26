@@ -6,7 +6,7 @@ using UnityEngine;
 namespace JiangJian
 {
     /// <summary>
-    /// XXL 模块库配置管理类
+    /// 资源库配置管理类
     /// 管理服务器地址、网络超时和本地磁盘缓存路径
     /// 兼容 Unity 2018+
     /// </summary>

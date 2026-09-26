@@ -6,7 +6,7 @@ using UnityEngine;
 namespace JiangJian
 {
     /// <summary>
-    /// XXL 模块库主编辑器可视化窗口
+    /// 资源库主编辑器可视化窗口
     /// 包含模块浏览、自制/商店与资源类型双重筛选、多图预览、包体下载与一键导入
     /// 兼容 Unity 2018+
     /// </summary>
@@ -21,18 +21,18 @@ namespace JiangJian
         private ModuleLibListView _listView;
         private ModuleLibDetailView _detailView;
 
-        [MenuItem("Tools/XXL 模块库/打开模块库窗口", priority = 0)]
-        [MenuItem("Window/XXL 模块库", priority = 100)]
+        [MenuItem("Tools/资源库/打开资源库窗口", priority = 0)]
+        [MenuItem("Window/资源库", priority = 100)]
         public static void OpenWindow()
         {
-            var window = GetWindow<ModuleLibWindow>("XXL 模块库");
+            var window = GetWindow<ModuleLibWindow>("资源库");
             window.minSize = new Vector2(680, 480);
             window.Show();
         }
 
         private void OnEnable()
         {
-            titleContent = new GUIContent("XXL 模块库");
+            titleContent = new GUIContent("资源库");
 
             _listView = new ModuleLibListView(
                 onSelectModel: model =>
@@ -136,7 +136,7 @@ namespace JiangJian
         {
             GUILayout.BeginHorizontal(EditorStyles.toolbar, GUILayout.Height(26));
 
-            GUILayout.Label(" 📦 XXL 模块库", EditorStyles.boldLabel, GUILayout.Width(100));
+            GUILayout.Label(" 📦 资源库", EditorStyles.boldLabel, GUILayout.Width(80));
 
             // 显示连接的服务器地址
             string statusTip = $"已连接: {ModuleLibConfig.ServerUrl}";
