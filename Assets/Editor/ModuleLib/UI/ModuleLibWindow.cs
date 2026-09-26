@@ -7,7 +7,7 @@ namespace JiangJian
 {
     /// <summary>
     /// 资源库主编辑器可视化窗口
-    /// 包含模块浏览、自制/商店与资源类型双重筛选、多图预览、包体下载与一键导入
+    /// 包含模块浏览、模块库/插件库与资源类型双重筛选、多图预览、包体下载与一键导入
     /// 兼容 Unity 2018+
     /// </summary>
     public class ModuleLibWindow : EditorWindow

@@ -111,9 +111,10 @@ namespace JiangJian
 
             // 来源标签
             bool isInternal = model.IsInternalModule();
-            string originText = isInternal ? "自制模块" : "Unity商店";
-            Color originCol = isInternal ? ModuleLibStyles.ColorInternalBadge : ModuleLibStyles.ColorStoreBadge;
-            Rect originRect = GUILayoutUtility.GetRect(64, 20, GUILayout.Width(64), GUILayout.Height(20));
+            string originText = isInternal ? "模块库" : "插件库";
+            Color originCol = isInternal ? ModuleLibStyles.ColorInternalBadge : ModuleLibStyles.ColorPluginBadge;
+            float originWidth = Mathf.Max(50f, originText.Length * 13f + 12f);
+            Rect originRect = GUILayoutUtility.GetRect(originWidth, 20, GUILayout.Width(originWidth), GUILayout.Height(20));
             ModuleLibStyles.DrawBadge(originRect, originText, originCol);
 
             GUILayout.Space(6);

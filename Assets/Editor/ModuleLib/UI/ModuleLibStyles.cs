@@ -14,7 +14,8 @@ namespace JiangJian
 
         // 调色板
         public static readonly Color ColorInternalBadge = new Color(0.18f, 0.55f, 0.34f, 1f);  // 绿色：自制模块
-        public static readonly Color ColorStoreBadge = new Color(0.15f, 0.45f, 0.82f, 1f);     // 蓝色：商店资产
+        public static readonly Color ColorPluginBadge = new Color(0.15f, 0.45f, 0.82f, 1f);    // 蓝色：插件库
+        public static readonly Color ColorStoreBadge = ColorPluginBadge;                        // 兼容别名
         public static readonly Color ColorTypeBadge = new Color(0.85f, 0.52f, 0.12f, 1f);      // 橙色：资源类型
         public static readonly Color ColorVersionBadge = new Color(0.35f, 0.40f, 0.48f, 1f);   // 灰蓝：版本
         public static readonly Color ColorCardBorder = new Color(0.3f, 0.33f, 0.38f, 0.6f);

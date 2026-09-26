@@ -20,6 +20,7 @@ namespace JiangJian
         private string _selectedTypeName = "全部";
         private SortOption _selectedSort = SortOption.Newest;
 
+        private readonly string[] _originTabLabels = new string[] { "全部来源", "模块库 (自制)", "插件库" };
         private readonly string[] _sortLabels = new string[] { "最新发布", "最多浏览", "最多下载", "名称升序" };
         private readonly string[] _fixedTypeNames = new string[] { "全部", "3D", "2D", "音频", "模板", "工具", "视觉特效" };
 
@@ -72,23 +73,14 @@ namespace JiangJian
         {
             GUILayout.BeginHorizontal(EditorStyles.toolbar, GUILayout.Height(30));
 
-            // 来源分类切换 Tab（全部 / 模块库 / Unity商店）
+            // 来源分类切换 Tab（全部 / 模块库 / 插件库）
             GUILayout.Space(4);
-            bool isAll = _selectedOrigin == OriginFilterType.All;
-            bool isInternal = _selectedOrigin == OriginFilterType.Internal;
-            bool isStore = _selectedOrigin == OriginFilterType.Store;
-
-            if (GUILayout.Toggle(isAll, "全部来源", ModuleLibStyles.TabButtonLeft, GUILayout.Width(76)))
+            int currentOrigin = (int)_selectedOrigin;
+            int newOrigin = GUILayout.Toolbar(currentOrigin, _originTabLabels, EditorStyles.toolbarButton, GUILayout.Width(250), GUILayout.Height(24));
+            if (newOrigin != currentOrigin)
             {
-                _selectedOrigin = OriginFilterType.All;
-            }
-            if (GUILayout.Toggle(isInternal, "模块库 (自制)", ModuleLibStyles.TabButtonMid, GUILayout.Width(96)))
-            {
-                _selectedOrigin = OriginFilterType.Internal;
-            }
-            if (GUILayout.Toggle(isStore, "Unity 商店", ModuleLibStyles.TabButtonRight, GUILayout.Width(82)))
-            {
-                _selectedOrigin = OriginFilterType.Store;
+                _selectedOrigin = (OriginFilterType)newOrigin;
+                GUI.FocusControl(null);
             }
 
             GUILayout.Space(12);
@@ -157,7 +149,7 @@ namespace JiangJian
 
                 // 来源过滤
                 if (_selectedOrigin == OriginFilterType.Internal && !item.IsInternalModule()) continue;
-                if (_selectedOrigin == OriginFilterType.Store && item.IsInternalModule()) continue;
+                if (_selectedOrigin == OriginFilterType.Plugin && !item.IsPluginModule()) continue;
 
                 // 类型过滤
                 if (_selectedTypeName != "全部")
@@ -295,11 +287,11 @@ namespace JiangJian
             float currentY = imgRect.yMax + 6f;
             float badgeHeight = 18f;
 
-            // 来源徽章（自制 vs 商店）
+            // 来源徽章（模块库 vs 插件库）
             bool isInternal = model.IsInternalModule();
-            string originText = isInternal ? "自制模块" : "Unity商店";
-            Color originCol = isInternal ? ModuleLibStyles.ColorInternalBadge : ModuleLibStyles.ColorStoreBadge;
-            float originBadgeWidth = 58f;
+            string originText = isInternal ? "模块库" : "插件库";
+            Color originCol = isInternal ? ModuleLibStyles.ColorInternalBadge : ModuleLibStyles.ColorPluginBadge;
+            float originBadgeWidth = Mathf.Max(50f, originText.Length * 13f + 12f);
             ModuleLibStyles.DrawBadge(new Rect(cardRect.x + pad, currentY, originBadgeWidth, badgeHeight), originText, originCol);
 
             // 类型徽章（3D/2D/音频等）

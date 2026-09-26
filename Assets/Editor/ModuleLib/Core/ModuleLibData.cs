@@ -35,7 +35,7 @@ namespace JiangJian
         public ModelExpandData expand;
 
         /// <summary>
-        /// 获取来源名称（如：模块库 / Unity商店）
+        /// 获取来源名称（如：模块库 / 插件库）
         /// </summary>
         public string GetCategoryName()
         {
@@ -59,12 +59,21 @@ namespace JiangJian
         }
 
         /// <summary>
-        /// 是否为内部自制模块
+        /// 是否为内部自制模块库
         /// </summary>
         public bool IsInternalModule()
         {
             string catName = GetCategoryName();
-            return catName.Contains("模块库") || category == "5q010nwkhziyuby";
+            return catName.Contains("模块") || category == "5q010nwkhziyuby";
+        }
+
+        /// <summary>
+        /// 是否为外部导入插件库
+        /// </summary>
+        public bool IsPluginModule()
+        {
+            string catName = GetCategoryName();
+            return catName.Contains("插件") || catName.Contains("商店") || category == "gei2blqbraoocsv";
         }
 
         /// <summary>
@@ -198,7 +207,8 @@ namespace JiangJian
     {
         All = 0,            // 全部
         Internal = 1,       // 模块库（自制模块）
-        Store = 2           // Unity 商店
+        Plugin = 2,         // 插件库
+        Store = 2           // 兼容别名
     }
 
     /// <summary>
