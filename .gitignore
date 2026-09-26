@@ -110,4 +110,5 @@ InitTestScene*.unity*
 # --------------------------------------------------
 DataBase/pb_data/
 DataBase/pocketbase.exe
+DataBase/pb_migrations/
 
