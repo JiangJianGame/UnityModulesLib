@@ -1,0 +1,243 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Networking;
+
+namespace JiangJian
+{
+    /// <summary>
+    /// 编辑器专属非阻塞 HTTP 异步请求封装
+    /// 由 EditorApplication.update 驱动，兼容 Unity 2018+
+    /// </summary>
+    public static class ModuleLibHttp
+    {
+        // 正在进行的纹理请求回调集合，防止对同一 URL 重复发起并发下载
+        private static readonly Dictionary<string, List<Action<Texture2D>>> PendingTextureCallbacks = new Dictionary<string, List<Action<Texture2D>>>();
+
+        /// <summary>
+        /// 异步 GET 请求并反序列化为 JSON 对象
+        /// </summary>
+        public static void GetJson<T>(string url, Action<T> onSuccess, Action<string> onError = null, float timeoutSeconds = 10f) where T : class
+        {
+            var request = UnityWebRequest.Get(url);
+            var asyncOp = request.SendWebRequest();
+            var startTime = EditorApplication.timeSinceStartup;
+
+            EditorApplication.CallbackFunction updateAction = null;
+            updateAction = () =>
+            {
+                if (EditorApplication.timeSinceStartup - startTime > timeoutSeconds)
+                {
+                    EditorApplication.update -= updateAction;
+                    request.Dispose();
+                    string timeoutMsg = $"请求超时 ({timeoutSeconds:F1}s): {url}";
+                    Debug.LogWarning("[ModuleLibHttp] " + timeoutMsg);
+                    if (onError != null) onError(timeoutMsg);
+                    return;
+                }
+
+                if (!asyncOp.isDone) return;
+
+                EditorApplication.update -= updateAction;
+
+                try
+                {
+#if UNITY_2020_1_OR_NEWER
+                    bool isError = request.result != UnityWebRequest.Result.Success;
+#else
+                    bool isError = request.isNetworkError || request.isHttpError;
+#endif
+                    if (isError)
+                    {
+                        string err = $"HTTP 请求失败: {request.error} (Code {request.responseCode})";
+                        if (onError != null) onError(err);
+                        return;
+                    }
+
+                    string json = request.downloadHandler.text;
+                    T data = JsonUtility.FromJson<T>(json);
+                    if (data != null)
+                    {
+                        if (onSuccess != null) onSuccess(data);
+                    }
+                    else
+                    {
+                        string err = "JSON 解析结果为空: " + json;
+                        if (onError != null) onError(err);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    string err = "处理响应异常: " + ex.Message;
+                    if (onError != null) onError(err);
+                }
+                finally
+                {
+                    request.Dispose();
+                }
+            };
+
+            EditorApplication.update += updateAction;
+        }
+
+        /// <summary>
+        /// 异步加载纹理（集成 ModuleLibCache 双层缓存，带多重请求合并）
+        /// </summary>
+        public static void GetTexture(string url, Action<Texture2D> onSuccess, Action<string> onError = null)
+        {
+            if (string.IsNullOrEmpty(url))
+            {
+                if (onError != null) onError("URL 为空");
+                return;
+            }
+
+            // 1. 尝试从缓存读取
+            var cached = ModuleLibCache.GetTexture(url);
+            if (cached != null)
+            {
+                if (onSuccess != null) onSuccess(cached);
+                return;
+            }
+
+            // 2. 检查是否已有针对该 URL 的下载任务正在进行
+            List<Action<Texture2D>> callbacks;
+            if (PendingTextureCallbacks.TryGetValue(url, out callbacks))
+            {
+                if (onSuccess != null) callbacks.Add(onSuccess);
+                return;
+            }
+
+            callbacks = new List<Action<Texture2D>>();
+            if (onSuccess != null) callbacks.Add(onSuccess);
+            PendingTextureCallbacks[url] = callbacks;
+
+            // 3. 发起网络请求
+            var request = UnityWebRequestTexture.GetTexture(url);
+            var asyncOp = request.SendWebRequest();
+            var startTime = EditorApplication.timeSinceStartup;
+
+            EditorApplication.CallbackFunction updateAction = null;
+            updateAction = () =>
+            {
+                if (EditorApplication.timeSinceStartup - startTime > 15f)
+                {
+                    EditorApplication.update -= updateAction;
+                    request.Dispose();
+                    PendingTextureCallbacks.Remove(url);
+                    if (onError != null) onError("加载图片超时: " + url);
+                    return;
+                }
+
+                if (!asyncOp.isDone) return;
+
+                EditorApplication.update -= updateAction;
+
+                try
+                {
+#if UNITY_2020_1_OR_NEWER
+                    bool isError = request.result != UnityWebRequest.Result.Success;
+#else
+                    bool isError = request.isNetworkError || request.isHttpError;
+#endif
+                    if (!isError)
+                    {
+                        var tex = DownloadHandlerTexture.GetContent(request);
+                        byte[] rawBytes = request.downloadHandler.data;
+                        ModuleLibCache.SaveTexture(url, tex, rawBytes);
+
+                        List<Action<Texture2D>> cbs;
+                        if (PendingTextureCallbacks.TryGetValue(url, out cbs))
+                        {
+                            PendingTextureCallbacks.Remove(url);
+                            for (int i = 0; i < cbs.Count; i++)
+                            {
+                                if (cbs[i] != null) cbs[i](tex);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        PendingTextureCallbacks.Remove(url);
+                        if (onError != null) onError(request.error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    PendingTextureCallbacks.Remove(url);
+                    if (onError != null) onError(ex.Message);
+                }
+                finally
+                {
+                    request.Dispose();
+                }
+            };
+
+            EditorApplication.update += updateAction;
+        }
+
+        /// <summary>
+        /// 异步下载文件（带平滑进度回调）
+        /// </summary>
+        public static void DownloadFile(string url, string savePath, Action<float> onProgress, Action<string> onComplete, Action<string> onError)
+        {
+            string dir = Path.GetDirectoryName(savePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbGET);
+            request.downloadHandler = new DownloadHandlerFile(savePath);
+            var asyncOp = request.SendWebRequest();
+
+            float lastProgressReportTime = 0f;
+
+            EditorApplication.CallbackFunction updateAction = null;
+            updateAction = () =>
+            {
+                // 限频上报进度（每 100ms 刷新一次）
+                float now = (float)EditorApplication.timeSinceStartup;
+                if (now - lastProgressReportTime > 0.1f)
+                {
+                    lastProgressReportTime = now;
+                    if (onProgress != null) onProgress(request.downloadProgress);
+                }
+
+                if (!asyncOp.isDone) return;
+
+                EditorApplication.update -= updateAction;
+
+                try
+                {
+#if UNITY_2020_1_OR_NEWER
+                    bool isError = request.result != UnityWebRequest.Result.Success;
+#else
+                    bool isError = request.isNetworkError || request.isHttpError;
+#endif
+                    if (isError)
+                    {
+                        if (File.Exists(savePath)) File.Delete(savePath);
+                        if (onError != null) onError(request.error);
+                    }
+                    else
+                    {
+                        if (onProgress != null) onProgress(1f);
+                        if (onComplete != null) onComplete(savePath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    if (onError != null) onError(ex.Message);
+                }
+                finally
+                {
+                    request.Dispose();
+                }
+            };
+
+            EditorApplication.update += updateAction;
+        }
+    }
+}
