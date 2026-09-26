@@ -104,3 +104,10 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# --------------------------------------------------
+# PocketBase 服务端数据、大文件资源与二进制可执行文件（禁止提交到 Git 平台）
+# --------------------------------------------------
+DataBase/pb_data/
+DataBase/pocketbase.exe
+
