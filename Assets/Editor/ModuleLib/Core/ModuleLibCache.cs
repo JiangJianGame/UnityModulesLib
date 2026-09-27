@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using UnityEditor;
 using UnityEngine;
 
 namespace JiangJian
@@ -142,6 +143,51 @@ namespace JiangJian
                 }
             }
             MemoryTextureCache.Clear();
+        }
+
+        /// <summary>
+        /// 关闭资源库界面或退出时，清理全部本地暂存包与缓存资源，确保零冗余
+        /// </summary>
+        public static void ClearAllResources()
+        {
+            // 1. 清理内存中的纹理资源
+            ClearMemoryCache();
+
+            // 2. 清理系统临时目录中的包体文件及临时文件夹
+            try
+            {
+                string tempRoot = Path.Combine(Path.GetTempPath(), "UnityModuleLib");
+                if (Directory.Exists(tempRoot))
+                {
+                    string[] files = Directory.GetFiles(tempRoot, "*", SearchOption.AllDirectories);
+                    foreach (var f in files)
+                    {
+                        try { File.Delete(f); } catch {}
+                    }
+                    try { Directory.Delete(tempRoot, true); } catch {}
+                }
+            }
+            catch {}
+
+            // 3. 清理工程 Library 下的图片磁盘缓存文件夹
+            try
+            {
+                string cacheRoot = ModuleLibConfig.CacheRootDirectory;
+                if (Directory.Exists(cacheRoot))
+                {
+                    string[] files = Directory.GetFiles(cacheRoot, "*", SearchOption.AllDirectories);
+                    foreach (var f in files)
+                    {
+                        try { File.Delete(f); } catch {}
+                    }
+                    try { Directory.Delete(cacheRoot, true); } catch {}
+                }
+            }
+            catch {}
+
+            // 4. 触发 Unity 资源卸载与垃圾回收
+            EditorUtility.UnloadUnusedAssetsImmediate();
+            GC.Collect();
         }
     }
 }

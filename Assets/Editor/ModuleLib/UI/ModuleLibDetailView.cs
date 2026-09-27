@@ -32,6 +32,7 @@ namespace JiangJian
             _downloadProgress = 0f;
             _statusMessage = "";
             _scrollPos = Vector2.zero;
+            ModuleLibCache.CleanAllTempPackages();
         }
 
         public void Draw(Rect totalArea, ModelItemData model, EditorWindow parentWindow)

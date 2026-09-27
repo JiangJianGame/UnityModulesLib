@@ -32,6 +32,19 @@ namespace JiangJian
             window.Focus();
         }
 
+        [InitializeOnLoadMethod]
+        private static void RegisterQuittingCleanup()
+        {
+            EditorApplication.quitting -= OnEditorQuitting;
+            EditorApplication.quitting += OnEditorQuitting;
+        }
+
+        private static void OnEditorQuitting()
+        {
+            // Unity 退出时彻底清除全部临时包体与本地缓存资源
+            ModuleLibCache.ClearAllResources();
+        }
+
         private void OnEnable()
         {
             titleContent = new GUIContent("资源库");
@@ -53,6 +66,7 @@ namespace JiangJian
                 onBackToList: () =>
                 {
                     _selectedModel = null;
+                    ModuleLibCache.CleanAllTempPackages();
                     Repaint();
                 }
             );
@@ -65,8 +79,8 @@ namespace JiangJian
 
         private void OnDestroy()
         {
-            // 关闭窗口时执行残留临时包扫描与清理
-            ModuleLibCache.CleanAllTempPackages();
+            // 关闭资源库界面时，清理掉全部资源（内存、临时包体、本地图片磁盘缓存）
+            ModuleLibCache.ClearAllResources();
         }
 
         /// <summary>
@@ -190,11 +204,10 @@ namespace JiangJian
                 RefreshData();
             }
 
-            if (GUILayout.Button("清理图片缓存", EditorStyles.miniButton, GUILayout.Width(84)))
+            if (GUILayout.Button("清理全部资源", EditorStyles.miniButton, GUILayout.Width(84)))
             {
-                ModuleLibCache.ClearMemoryCache();
-                ModuleLibConfig.ClearThumbnailCache();
-                EditorUtility.DisplayDialog("提示", "本地图片缓存已清空！", "确定");
+                ModuleLibCache.ClearAllResources();
+                EditorUtility.DisplayDialog("提示", "所有临时包体、图片缓存与内存资源已彻底清空！", "确定");
                 Repaint();
             }
 
