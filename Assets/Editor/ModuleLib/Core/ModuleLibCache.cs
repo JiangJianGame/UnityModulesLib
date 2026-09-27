@@ -101,7 +101,12 @@ namespace JiangJian
                 string dir = ModuleLibConfig.TempPackageDirectory;
                 if (Directory.Exists(dir))
                 {
-                    Directory.Delete(dir, true);
+                    string[] files = Directory.GetFiles(dir, "*", SearchOption.AllDirectories);
+                    foreach (var f in files)
+                    {
+                        try { File.Delete(f); } catch {}
+                    }
+                    try { Directory.Delete(dir, true); } catch {}
                 }
             }
             catch {}

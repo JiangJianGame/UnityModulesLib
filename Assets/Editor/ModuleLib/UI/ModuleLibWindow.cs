@@ -36,6 +36,9 @@ namespace JiangJian
         {
             titleContent = new GUIContent("资源库");
 
+            // 每次打开或启用窗口时，主动清理任何残留的临时包体
+            ModuleLibCache.CleanAllTempPackages();
+
             _listView = new ModuleLibListView(
                 onSelectModel: model =>
                 {
@@ -58,6 +61,12 @@ namespace JiangJian
             {
                 RefreshData();
             }
+        }
+
+        private void OnDestroy()
+        {
+            // 关闭窗口时执行残留临时包扫描与清理
+            ModuleLibCache.CleanAllTempPackages();
         }
 
         /// <summary>

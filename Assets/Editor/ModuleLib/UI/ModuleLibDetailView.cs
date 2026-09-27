@@ -301,6 +301,9 @@ namespace JiangJian
         {
             if (string.IsNullOrEmpty(downloadUrl)) return;
 
+            // 每次下载前先清理可能存在的残留临时包
+            ModuleLibCache.CleanAllTempPackages();
+
             // 在系统 Temp 临时目录创建毫秒级暂存文件（不在工程内，工程体积 0 增加）
             string tempPackagePath = ModuleLibCache.CreateTempPackagePath(model.zip_file);
             _isDownloading = true;
@@ -328,10 +331,7 @@ namespace JiangJian
                     _isDownloading = false;
                     _statusMessage = "传输失败: " + error;
                     Debug.LogError("[ModuleLibDetailView] 获取包体失败: " + error);
-                    if (File.Exists(tempPackagePath))
-                    {
-                        try { File.Delete(tempPackagePath); } catch {}
-                    }
+                    DeleteTempFileWithRetry(tempPackagePath, 0);
                     if (parentWindow != null) parentWindow.Repaint();
                 });
         }
@@ -344,36 +344,179 @@ namespace JiangJian
                 return;
             }
 
-            // 注册 Unity 导入事件监听（无论用户点击导入、取消、还是导入失败，均在完成时瞬间销毁临时文件）
+            // 状态标记
+            bool importStarted = false;
+            bool cleanedUp = false;
+            bool windowEverDetected = false;
+            double windowClosedTime = 0;
+            double startTime = EditorApplication.timeSinceStartup;
+
+            Action cleanup = null;
+            EditorApplication.CallbackFunction updateWatcher = null;
+            AssetDatabase.ImportPackageCallback onStarted = null;
             AssetDatabase.ImportPackageCallback onCompleted = null;
             AssetDatabase.ImportPackageCallback onCancelled = null;
             AssetDatabase.ImportPackageFailedCallback onFailed = null;
 
-            Action cleanup = () =>
+            cleanup = () =>
             {
+                if (cleanedUp) return;
+                cleanedUp = true;
+
+                if (updateWatcher != null)
+                {
+                    EditorApplication.update -= updateWatcher;
+                    updateWatcher = null;
+                }
+
+                AssetDatabase.importPackageStarted -= onStarted;
                 AssetDatabase.importPackageCompleted -= onCompleted;
                 AssetDatabase.importPackageCancelled -= onCancelled;
                 AssetDatabase.importPackageFailed -= onFailed;
-                try
-                {
-                    if (File.Exists(tempPackagePath))
-                    {
-                        File.Delete(tempPackagePath);
-                    }
-                }
-                catch {}
+
+                // 异步重试删除临时包体（防止 Unity 关闭窗口瞬间仍占用文件句柄）
+                DeleteTempFileWithRetry(tempPackagePath, 0);
             };
 
-            onCompleted = packageName => cleanup();
-            onCancelled = packageName => cleanup();
-            onFailed = (packageName, errorMsg) => cleanup();
+            onStarted = packageName =>
+            {
+                importStarted = true;
+            };
 
+            onCompleted = packageName =>
+            {
+                cleanup();
+            };
+
+            onCancelled = packageName =>
+            {
+                cleanup();
+            };
+
+            onFailed = (packageName, errorMsg) =>
+            {
+                cleanup();
+            };
+
+            AssetDatabase.importPackageStarted += onStarted;
             AssetDatabase.importPackageCompleted += onCompleted;
             AssetDatabase.importPackageCancelled += onCancelled;
             AssetDatabase.importPackageFailed += onFailed;
 
             // 唤起 Unity 官方原生导入窗口（interactive: true 会展示勾选确认弹窗）
             AssetDatabase.ImportPackage(tempPackagePath, true);
+
+            // 启动 Update 监听器：侦测 Unity PackageImport 弹窗生命周期
+            // 如果用户点击取消或点击右上角 X 关闭窗口，Unity 并不会可靠派发 importPackageCancelled 事件，
+            // 此时通过侦测弹窗关闭且未触发 importPackageStarted，精准判定取消并即时销毁临时文件！
+            updateWatcher = () =>
+            {
+                if (cleanedUp) return;
+
+                bool isWindowOpen = IsPackageImportWindowOpen();
+
+                if (isWindowOpen)
+                {
+                    windowEverDetected = true;
+                    windowClosedTime = 0;
+                }
+                else
+                {
+                    if (windowEverDetected)
+                    {
+                        // 弹窗曾打开，现在已关闭
+                        if (windowClosedTime <= 0)
+                        {
+                            windowClosedTime = EditorApplication.timeSinceStartup;
+                        }
+                        else if (EditorApplication.timeSinceStartup - windowClosedTime >= 0.4)
+                        {
+                            // 窗口关闭超过 0.4 秒，且未触发开始导入
+                            if (!importStarted)
+                            {
+                                // 用户点击了取消或右上角 X 叉掉弹窗，立即销毁临时文件
+                                cleanup();
+                                return;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // 超过 10 秒弹窗仍未出现且未开始导入，执行安全兜底清理
+                        if (EditorApplication.timeSinceStartup - startTime > 10.0)
+                        {
+                            cleanup();
+                            return;
+                        }
+                    }
+                }
+
+                // 安全兜底：导入耗时保护（若超过 300 秒，解绑并尝试清理）
+                if (importStarted && EditorApplication.timeSinceStartup - startTime > 300.0)
+                {
+                    cleanup();
+                }
+            };
+
+            EditorApplication.update += updateWatcher;
+        }
+
+        private static bool IsPackageImportWindowOpen()
+        {
+            try
+            {
+                var windows = Resources.FindObjectsOfTypeAll<EditorWindow>();
+                if (windows != null)
+                {
+                    for (int i = 0; i < windows.Length; i++)
+                    {
+                        var w = windows[i];
+                        if (w != null && w.GetType().Name.IndexOf("PackageImport", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            catch {}
+            return false;
+        }
+
+        private static void DeleteTempFileWithRetry(string filePath, int retryCount)
+        {
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
+
+            try
+            {
+                File.Delete(filePath);
+                string dir = Path.GetDirectoryName(filePath);
+                if (Directory.Exists(dir) && Directory.GetFiles(dir).Length == 0 && Directory.GetDirectories(dir).Length == 0)
+                {
+                    try { Directory.Delete(dir); } catch {}
+                }
+            }
+            catch (IOException)
+            {
+                // Unity 可能短暂占用文件句柄，200ms 后重试（最多 10 次）
+                if (retryCount < 10)
+                {
+                    double nextTry = EditorApplication.timeSinceStartup + 0.2;
+                    EditorApplication.CallbackFunction retryFn = null;
+                    retryFn = () =>
+                    {
+                        if (EditorApplication.timeSinceStartup >= nextTry)
+                        {
+                            EditorApplication.update -= retryFn;
+                            DeleteTempFileWithRetry(filePath, retryCount + 1);
+                        }
+                    };
+                    EditorApplication.update += retryFn;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[ModuleLibDetailView] 清理临时包体异常: " + ex.Message);
+            }
         }
 
         private void DrawDescriptionSection(ModelItemData model)
