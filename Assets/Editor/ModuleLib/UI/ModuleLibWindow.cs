@@ -21,13 +21,15 @@ namespace JiangJian
         private ModuleLibListView _listView;
         private ModuleLibDetailView _detailView;
 
-        [MenuItem("Tools/资源库/打开资源库窗口", priority = 0)]
-        [MenuItem("Window/资源库", priority = 100)]
+        [MenuItem("Tools/资源库/打开资源库窗口 %#x", priority = 0)]
+        [MenuItem("Window/资源库 %#x", priority = 100)]
         public static void OpenWindow()
         {
-            var window = GetWindow<ModuleLibWindow>("资源库");
+            // 停靠在 Scene 场景视图面板（如同 Unity Asset Store 商店窗口，钉在主面板上而非独立悬浮）
+            var window = GetWindow<ModuleLibWindow>("资源库", typeof(SceneView));
             window.minSize = new Vector2(680, 480);
             window.Show();
+            window.Focus();
         }
 
         private void OnEnable()
