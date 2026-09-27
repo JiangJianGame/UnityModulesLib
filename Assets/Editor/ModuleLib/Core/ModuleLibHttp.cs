@@ -189,7 +189,8 @@ namespace JiangJian
             }
 
             var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbGET);
-            request.downloadHandler = new DownloadHandlerFile(savePath);
+            var bufferHandler = new DownloadHandlerBuffer();
+            request.downloadHandler = bufferHandler;
             var asyncOp = request.SendWebRequest();
 
             float lastProgressReportTime = 0f;
@@ -223,6 +224,12 @@ namespace JiangJian
                     }
                     else
                     {
+                        // 全内存接收完成后原子写入目标路径，杜绝任何 0 字节磁盘占位 .tmp 文件
+                        byte[] bytes = bufferHandler.data;
+                        if (bytes != null && bytes.Length > 0)
+                        {
+                            File.WriteAllBytes(savePath, bytes);
+                        }
                         if (onProgress != null) onProgress(1f);
                         if (onComplete != null) onComplete(savePath);
                     }
@@ -234,6 +241,7 @@ namespace JiangJian
                 finally
                 {
                     request.Dispose();
+                    bufferHandler.Dispose();
                 }
             };
 

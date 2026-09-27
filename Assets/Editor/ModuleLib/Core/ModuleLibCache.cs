@@ -93,7 +93,7 @@ namespace JiangJian
         }
 
         /// <summary>
-        /// 清理系统临时目录中的残留暂存包
+        /// 清理系统临时目录中的残留暂存包及 Unity 产生的空句柄 .tmp 文件
         /// </summary>
         public static void CleanAllTempPackages()
         {
@@ -111,6 +111,45 @@ namespace JiangJian
                 }
             }
             catch {}
+
+            // 清理系统 Temp 根目录下由网络请求残留的 0 字节 GUID .tmp 垃圾文件
+            CleanResidualTempFiles();
+        }
+
+        /// <summary>
+        /// 扫描并清理系统 Temp 根目录下残留的 0 字节 GUID 格式 .tmp 垃圾句柄文件
+        /// </summary>
+        public static void CleanResidualTempFiles()
+        {
+            try
+            {
+                string tempDir = Path.GetTempPath();
+                if (Directory.Exists(tempDir))
+                {
+                    string[] tmpFiles = Directory.GetFiles(tempDir, "*.tmp", SearchOption.TopDirectoryOnly);
+                    foreach (var file in tmpFiles)
+                    {
+                        try
+                        {
+                            var fi = new FileInfo(file);
+                            if (fi.Length == 0 && IsGuidFileName(fi.Name))
+                            {
+                                fi.Delete();
+                            }
+                        }
+                        catch {}
+                    }
+                }
+            }
+            catch {}
+        }
+
+        private static bool IsGuidFileName(string fileNameWithExt)
+        {
+            if (string.IsNullOrEmpty(fileNameWithExt)) return false;
+            string nameWithoutExt = Path.GetFileNameWithoutExtension(fileNameWithExt);
+            Guid parsed;
+            return Guid.TryParse(nameWithoutExt, out parsed);
         }
 
         /// <summary>
