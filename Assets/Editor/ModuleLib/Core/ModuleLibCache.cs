@@ -198,7 +198,8 @@ namespace JiangJian
             // 1. 清理内存中的纹理资源
             ClearMemoryCache();
 
-            // 2. 清理系统临时目录中的包体文件及临时文件夹
+            // 2. 清理系统临时目录中的包体文件、临时文件夹及残留垃圾句柄
+            CleanResidualTempFiles();
             try
             {
                 string tempRoot = Path.Combine(Path.GetTempPath(), "UnityModuleLib");
