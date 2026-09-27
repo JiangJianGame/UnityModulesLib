@@ -21,7 +21,7 @@ namespace JiangJian
         private ModuleLibListView _listView;
         private ModuleLibDetailView _detailView;
 
-        [MenuItem("Tools/资源库/打开资源库窗口 %#x", priority = 0)]
+        [MenuItem("Tools/资源库/打开资源库窗口", priority = 0)]
         [MenuItem("Window/资源库 %#x", priority = 100)]
         public static void OpenWindow()
         {
