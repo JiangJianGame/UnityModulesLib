@@ -139,6 +139,12 @@ namespace JiangJian
                         }
                         catch {}
                     }
+                    // 清理 .NET SDK 命令行产生的诊断日志文件
+                    string[] netLogs = Directory.GetFiles(tempDir, "Microsoft.NET.Workload_*.log", SearchOption.TopDirectoryOnly);
+                    foreach (var logFile in netLogs)
+                    {
+                        try { File.Delete(logFile); } catch {}
+                    }
                 }
             }
             catch {}
