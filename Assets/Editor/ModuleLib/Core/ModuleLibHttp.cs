@@ -247,5 +247,65 @@ namespace JiangJian
 
             EditorApplication.update += updateAction;
         }
+
+        /// <summary>
+        /// 异步 PATCH 请求（用于更新记录统计信息等）
+        /// </summary>
+        public static void PatchJson(string url, string jsonBody, Action onSuccess = null, Action<string> onError = null, float timeoutSeconds = 10f)
+        {
+            var request = new UnityWebRequest(url, "PATCH");
+            byte[] bodyRaw = System.Text.Encoding.UTF8.GetBytes(jsonBody);
+            request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+            request.downloadHandler = new DownloadHandlerBuffer();
+            request.SetRequestHeader("Content-Type", "application/json");
+
+            var asyncOp = request.SendWebRequest();
+            var startTime = EditorApplication.timeSinceStartup;
+
+            EditorApplication.CallbackFunction updateAction = null;
+            updateAction = () =>
+            {
+                if (EditorApplication.timeSinceStartup - startTime > timeoutSeconds)
+                {
+                    EditorApplication.update -= updateAction;
+                    request.Dispose();
+                    if (onError != null) onError($"请求超时 ({timeoutSeconds:F1}s): {url}");
+                    return;
+                }
+
+                if (!asyncOp.isDone) return;
+
+                EditorApplication.update -= updateAction;
+
+                try
+                {
+#if UNITY_2020_1_OR_NEWER
+                    bool isError = request.result != UnityWebRequest.Result.Success;
+#else
+                    bool isError = request.isNetworkError || request.isHttpError;
+#endif
+                    if (isError)
+                    {
+                        string err = $"PATCH 请求失败: {request.error} (Code {request.responseCode})";
+                        if (onError != null) onError(err);
+                    }
+                    else
+                    {
+                        if (onSuccess != null) onSuccess();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    string err = "处理响应异常: " + ex.Message;
+                    if (onError != null) onError(err);
+                }
+                finally
+                {
+                    request.Dispose();
+                }
+            };
+
+            EditorApplication.update += updateAction;
+        }
     }
 }

@@ -56,6 +56,10 @@ namespace JiangJian
                 onSelectModel: model =>
                 {
                     _selectedModel = model;
+                    if (model != null)
+                    {
+                        model.IncrementViewCount(ModuleLibConfig.ServerUrl);
+                    }
                     if (_detailView != null) _detailView.ResetState();
                     Repaint();
                 },

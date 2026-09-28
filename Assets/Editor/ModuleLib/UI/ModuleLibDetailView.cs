@@ -302,6 +302,9 @@ namespace JiangJian
         {
             if (string.IsNullOrEmpty(downloadUrl)) return;
 
+            // 增加下载量并即时异步同步至服务端数据库
+            model.IncrementDownloadCount(ModuleLibConfig.ServerUrl);
+
             // 每次下载前先清理可能存在的残留临时包
             ModuleLibCache.CleanAllTempPackages();
 

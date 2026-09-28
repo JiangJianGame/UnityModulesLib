@@ -131,6 +131,40 @@ namespace JiangJian
             }
             return null;
         }
+
+        /// <summary>
+        /// 增加查看次数并即时异步同步至服务端
+        /// </summary>
+        public void IncrementViewCount(string baseUrl)
+        {
+            int nextCount = GetViewCountInt() + 1;
+            view_Count = nextCount.ToString();
+
+            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(baseUrl)) return;
+            string url = $"{baseUrl}/api/collections/models/records/{id}";
+            string body = $"{{\"view_Count\":\"{nextCount}\"}}";
+            ModuleLibHttp.PatchJson(url, body, null, err =>
+            {
+                Debug.LogWarning($"[ModuleLib] 同步查看次数失败 ({title}): {err}");
+            });
+        }
+
+        /// <summary>
+        /// 增加下载次数并即时异步同步至服务端
+        /// </summary>
+        public void IncrementDownloadCount(string baseUrl)
+        {
+            int nextCount = GetDownloadCountInt() + 1;
+            download_count = nextCount.ToString();
+
+            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(baseUrl)) return;
+            string url = $"{baseUrl}/api/collections/models/records/{id}";
+            string body = $"{{\"download_count\":\"{nextCount}\"}}";
+            ModuleLibHttp.PatchJson(url, body, null, err =>
+            {
+                Debug.LogWarning($"[ModuleLib] 同步下载次数失败 ({title}): {err}");
+            });
+        }
     }
 
     [Serializable]
