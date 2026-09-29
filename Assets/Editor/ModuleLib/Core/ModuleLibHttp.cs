@@ -44,12 +44,7 @@ namespace JiangJian
 
                 try
                 {
-#if UNITY_2020_1_OR_NEWER
-                    bool isError = request.result != UnityWebRequest.Result.Success;
-#else
-                    bool isError = request.isNetworkError || request.isHttpError;
-#endif
-                    if (isError)
+                    if (HasError(request))
                     {
                         string err = $"HTTP 请求失败: {request.error} (Code {request.responseCode})";
                         if (onError != null) onError(err);
@@ -136,12 +131,7 @@ namespace JiangJian
 
                 try
                 {
-#if UNITY_2020_1_OR_NEWER
-                    bool isError = request.result != UnityWebRequest.Result.Success;
-#else
-                    bool isError = request.isNetworkError || request.isHttpError;
-#endif
-                    if (!isError)
+                    if (!HasError(request))
                     {
                         var tex = DownloadHandlerTexture.GetContent(request);
                         byte[] rawBytes = request.downloadHandler.data;
@@ -212,11 +202,7 @@ namespace JiangJian
 
                 try
                 {
-#if UNITY_2020_1_OR_NEWER
-                    bool isError = request.result != UnityWebRequest.Result.Success;
-#else
-                    bool isError = request.isNetworkError || request.isHttpError;
-#endif
+                    bool isError = HasError(request);
                     if (isError)
                     {
                         if (File.Exists(savePath)) File.Delete(savePath);
@@ -279,12 +265,7 @@ namespace JiangJian
 
                 try
                 {
-#if UNITY_2020_1_OR_NEWER
-                    bool isError = request.result != UnityWebRequest.Result.Success;
-#else
-                    bool isError = request.isNetworkError || request.isHttpError;
-#endif
-                    if (isError)
+                    if (HasError(request))
                     {
                         string err = $"PATCH 请求失败: {request.error} (Code {request.responseCode})";
                         if (onError != null) onError(err);
@@ -306,6 +287,37 @@ namespace JiangJian
             };
 
             EditorApplication.update += updateAction;
+        }
+
+        /// <summary>
+        /// 跨版本安全判断 UnityWebRequest 是否发生错误
+        /// 兼顾 Unity 2018.4 到 Unity 2022+ 及 Unity 6，防止编译为 DLL 后出现跨版本 MissingMethodException
+        /// </summary>
+        public static bool HasError(UnityWebRequest request)
+        {
+            if (request == null) return true;
+            try
+            {
+                // Unity 2020.1+ 推荐属性 result
+                var resultProp = typeof(UnityWebRequest).GetProperty("result");
+                if (resultProp != null)
+                {
+                    var val = (int)resultProp.GetValue(request, null);
+                    // UnityWebRequest.Result.Success == 1
+                    return val != 1;
+                }
+
+                // Unity 2018 / 2019 属性 isNetworkError || isHttpError
+                var isNetErr = typeof(UnityWebRequest).GetProperty("isNetworkError");
+                var isHttpErr = typeof(UnityWebRequest).GetProperty("isHttpError");
+                bool netErr = isNetErr != null && (bool)isNetErr.GetValue(request, null);
+                bool httpErr = isHttpErr != null && (bool)isHttpErr.GetValue(request, null);
+                return netErr || httpErr;
+            }
+            catch
+            {
+                return !string.IsNullOrEmpty(request.error);
+            }
         }
     }
 }
