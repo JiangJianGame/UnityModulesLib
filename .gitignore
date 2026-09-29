@@ -114,4 +114,5 @@ DataBase/pb_migrations/
 __pycache__/
 *.pyc
 DataBase/studio_covers/
+DataBase/official_covers/
 
