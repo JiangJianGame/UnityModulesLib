@@ -115,4 +115,5 @@ __pycache__/
 *.pyc
 DataBase/studio_covers/
 DataBase/official_covers/
+DataBase/gallery_images/
 
